@@ -4,60 +4,76 @@ A Streamlit application that classifies an uploaded heart-sound recording into o
 
 > **Research/educational project only.** This model is not a medical device and must not be used to diagnose, rule out, or make treatment decisions about a heart condition. Predictions require clinical interpretation by a qualified professional.
 
-## Repository contents
+## Repository files
 
 | File | Purpose |
 |---|---|
 | `heartbeatdetection.ipynb` | Model development and training notebook |
 | `heartbeat_model.h5` | Saved TensorFlow/Keras model used by the app |
-| `heartbeat_model.pkl` | Existing serialized artifact; its role has not yet been verified |
-| `app (1).py` | Streamlit inference interface |
+| `heartbeat_model.pkl` | Existing serialized artifact; its role still needs verification |
+| `app.py` | Streamlit inference application |
+| `app (1).py` | Earlier application version |
 | `requirements.txt` | Python dependencies |
 
-## How the application works
+## Inference workflow
 
-1. Upload a heart-sound recording in WAV format.
-2. Load and resample the audio to 22,050 Hz.
-3. Extract 25 Mel-frequency cepstral coefficients (MFCCs).
-4. Pad or truncate the feature sequence to 500 frames.
-5. Add a batch dimension and pass the tensor to the saved Keras model.
-6. Display the predicted class and the model's class scores.
+1. Upload a WAV heart-sound recording.
+2. Load it as mono audio and resample to 22,050 Hz.
+3. Use the first 5 seconds of audio.
+4. Extract 25 MFCC coefficients.
+5. Pad or truncate the feature sequence to 500 frames.
+6. Add a batch dimension and pass the tensor to the saved Keras model.
+7. Display the predicted class and raw model output scores.
 
-Current inference tensor layout: `(batch, 25, 500)`.
+The current app produces an input tensor with shape `(1, 25, 500)`. It checks the loaded model's expected input shape and output count before displaying a prediction.
 
 ## Run locally
 
-Use Python 3.10 or 3.11 in a virtual environment.
+Use a Python environment compatible with the TensorFlow version installed on your system.
 
 ```bash
 python -m venv .venv
-# Windows:
+
+# Windows
 .venv\Scripts\activate
-# macOS/Linux:
+
+# macOS/Linux
 source .venv/bin/activate
 
 pip install -r requirements.txt
-streamlit run "app (1).py"
+streamlit run app.py
 ```
 
-Keep `heartbeat_model.h5` in the same directory as the Streamlit app.
+Keep `heartbeat_model.h5` in the same directory as `app.py`.
 
-## Important model consistency note
+## Important: training and inference must match
 
-The current application code uses 5 seconds of audio, 22,050 Hz, 25 MFCC coefficients, and 500 frames. These settings must exactly match the preprocessing used to train the committed model. The training notebook's content could not be inspected from the repository file endpoint during this documentation pass, so training/inference parity and the class-index order have **not** been independently verified. The app checks the loaded model's input/output dimensions at runtime, but matching dimensions alone do not prove matching preprocessing or label semantics.
+The current app uses 5 seconds, 22,050 Hz, 25 MFCC coefficients, 500 frames, and the tensor layout `(batch, 25, 500)`. These values must exactly match the preprocessing used to train the committed model. The training notebook could not be inspected during this update, so preprocessing parity and the class-index order have **not** been independently verified. Matching tensor dimensions alone does not prove that the features or labels are semantically correct.
 
-Before reporting performance, evaluate on a held-out, labelled test set that was not used for training, validation, threshold selection, or tuning. Report per-class precision/recall/F1, macro-F1, a confusion matrix, and the test-set class distribution. Do not describe accuracy measured on unlabelled or training data as test accuracy.
+The app currently assumes the output order is `normal`, `murmur`, `extrahlsystole`. Confirm this against the exact label encoder or class-index mapping used during training before relying on predictions.
+
+## Evaluation checklist
+
+Evaluate only on an untouched, labelled test set that was not used for training, validation, model selection, or threshold tuning. Report:
+- Per-class precision, recall, and F1-score
+- Macro-F1 and accuracy
+- Confusion matrix
+- Number of samples per class
+- Test split strategy and any patient/recording-level grouping used to prevent leakage
+
+Do not report training accuracy as test performance. If recordings from the same patient or original recording appear in multiple splits, the evaluation may be overly optimistic.
 
 ## Limitations
 
-- Predictions depend on recording quality, segmentation, dataset coverage, and the model's training distribution.
-- The displayed scores are model outputs, not calibrated clinical probabilities.
-- The current three-class label mapping must be confirmed against the label encoder/class order used during training.
-- The purpose of `heartbeat_model.pkl` remains undocumented until its contents and use are verified.
+- Recording quality, background noise, segmentation, and dataset coverage can affect predictions.
+- Raw model scores are not calibrated clinical probabilities.
+- This project is for learning and research, not clinical diagnosis or treatment decisions.
+- The purpose of `heartbeat_model.pkl` must be documented after its contents and use are verified.
 
-## Suggested next validation steps
+## Remaining verification
 
-- Confirm the notebook's sample rate, audio duration/windowing, MFCC parameters, tensor layout, and class-index mapping.
-- Re-train or export the model with the exact preprocessing pipeline used by the app if they differ.
-- Save the best validation checkpoint rather than automatically using the final epoch.
-- Evaluate once on an untouched, labelled test set and document the resulting metrics.
+1. Inspect the training notebook and confirm sample rate, duration, MFCC configuration, padding/truncation, tensor layout, and label order.
+2. Confirm the model's actual input/output shapes from `heartbeat_model.h5`.
+3. Confirm what `heartbeat_model.pkl` stores and whether the application needs it.
+4. Run the app with known WAV examples and check that predictions execute end-to-end.
+5. Evaluate on a separate labelled test set and document measured results.
